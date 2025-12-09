@@ -61,7 +61,7 @@ public class LotService : ILotService
                 
                 // Pre-calculated insurance form values
                 EstimatedHouseValue = (int)Math.Round(floorArea * 3500),
-                MappedLocation = MapLocation(location),
+                MappedLocation = location, // Keep original location as string
                 MappedConstructionType = MapConstructionType(buildType)
             };
         }
@@ -70,17 +70,6 @@ public class LotService : ILotService
             _logger.LogError(ex, "Error fetching lot data for {LotId}", lotId);
             return null;
         }
-    }
-
-    private string MapLocation(string location)
-    {
-        var locationLower = location.ToLower();
-        
-        if (locationLower.Contains("auckland")) return "Auckland";
-        if (locationLower.Contains("wellington")) return "Wellington";
-        if (locationLower.Contains("christchurch")) return "Christchurch";
-        
-        return "Other";
     }
 
     private string MapConstructionType(string buildType)
