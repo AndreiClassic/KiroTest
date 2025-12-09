@@ -168,12 +168,7 @@ const calculateInsurance = async () => {
 
       <div class="form-group">
         <label>Location</label>
-        <select v-model="form.location">
-          <option>Auckland</option>
-          <option>Wellington</option>
-          <option>Christchurch</option>
-          <option>Other</option>
-        </select>
+        <input v-model="form.location" type="text" required placeholder="e.g., Auckland, Wellington" />
       </div>
 
       <div class="form-group">

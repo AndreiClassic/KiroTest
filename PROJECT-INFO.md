@@ -377,3 +377,4 @@ The project uses Git with a comprehensive `.gitignore` file that excludes:
 - Implement quote history and comparison features
 - Add admin dashboard for quote management
 - Add application metrics and performance monitoring
+- **PDF Download**: Add functionality to download insurance quote as PDF document
