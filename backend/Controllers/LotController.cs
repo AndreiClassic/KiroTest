@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using backend.Services;
 using backend.Models;
+using backend.Models.Lot;
 
 namespace backend.Controllers;
 

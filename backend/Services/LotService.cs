@@ -1,4 +1,5 @@
 using System.Text.Json;
+using backend.Models.Lot;
 
 namespace backend.Services;
 
@@ -27,28 +28,36 @@ public class LotService : ILotService
             }
 
             var json = await response.Content.ReadAsStringAsync();
+            _logger.LogInformation("Received lot data from external API for Lot {LotId}: {JsonResponse}", 
+                lotId, json);
+            
             var lotResponse = JsonSerializer.Deserialize<LotApiResponse>(json, new JsonSerializerOptions 
             { 
                 PropertyNameCaseInsensitive = true 
             });
 
-            if (lotResponse == null) return null;
+            if (lotResponse?.ResultObject == null)
+            {
+                _logger.LogWarning("Failed to deserialize lot data for Lot {LotId}", lotId);
+                return null;
+            }
 
-            var floorArea = lotResponse.Amenities?.FloorArea ?? 0;
-            var location = lotResponse.Location?.Area?.Label ?? lotResponse.LotAddress?.City ?? "";
-            var buildType = lotResponse.BuildType?.Label ?? "";
+            var result = lotResponse.ResultObject;
+            var floorArea = result.Amenities?.FloorArea ?? 0;
+            var location = result.Location?.Area?.Label ?? result.LotAddress?.City ?? "";
+            var buildType = result.BuildType?.Label ?? "";
 
             return new LotData
             {
-                Address = $"{lotResponse.LotAddress?.Street}, {lotResponse.LotAddress?.Suburb}",
+                Address = $"{result.LotAddress?.Street}, {result.LotAddress?.Suburb}",
                 Location = location,
-                Region = lotResponse.Location?.Region?.Label ?? lotResponse.LotAddress?.RegionName ?? "",
+                Region = result.Location?.Region?.Label ?? result.LotAddress?.RegionName ?? "",
                 FloorArea = floorArea,
-                LandArea = lotResponse.Amenities?.LandArea ?? 0,
-                Bedrooms = lotResponse.Amenities?.NoBedrooms ?? 0,
-                Bathrooms = lotResponse.Amenities?.NoBathrooms ?? 0,
+                LandArea = result.Amenities?.LandArea ?? 0,
+                Bedrooms = result.Amenities?.NoBedrooms ?? 0,
+                Bathrooms = result.Amenities?.NoBathrooms ?? 0,
                 BuildType = buildType,
-                BuildYear = ExtractBuildYear(lotResponse.JobComplete?.Estimate),
+                BuildYear = ExtractBuildYear(result.JobComplete?.Estimate),
                 
                 // Pre-calculated insurance form values
                 EstimatedHouseValue = (int)Math.Round(floorArea * 3500),
@@ -96,62 +105,4 @@ public class LotService : ILotService
         
         return null;
     }
-}
-
-// API Response Models
-public class LotApiResponse
-{
-    public LocationInfo? Location { get; set; }
-    public LotAddressInfo? LotAddress { get; set; }
-    public AmenitiesInfo? Amenities { get; set; }
-    public BuildTypeInfo? BuildType { get; set; }
-    public JobCompleteInfo? JobComplete { get; set; }
-}
-
-public class LocationInfo
-{
-    public RegionInfo? Region { get; set; }
-    public DistrictInfo? District { get; set; }
-    public AreaInfo? Area { get; set; }
-}
-
-public class RegionInfo
-{
-    public string Label { get; set; } = string.Empty;
-}
-
-public class DistrictInfo
-{
-    public string Label { get; set; } = string.Empty;
-}
-
-public class AreaInfo
-{
-    public string Label { get; set; } = string.Empty;
-}
-
-public class LotAddressInfo
-{
-    public string Street { get; set; } = string.Empty;
-    public string Suburb { get; set; } = string.Empty;
-    public string City { get; set; } = string.Empty;
-    public string RegionName { get; set; } = string.Empty;
-}
-
-public class AmenitiesInfo
-{
-    public decimal FloorArea { get; set; }
-    public decimal LandArea { get; set; }
-    public int NoBedrooms { get; set; }
-    public int NoBathrooms { get; set; }
-}
-
-public class BuildTypeInfo
-{
-    public string Label { get; set; } = string.Empty;
-}
-
-public class JobCompleteInfo
-{
-    public string? Estimate { get; set; }
 }

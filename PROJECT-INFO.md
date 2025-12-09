@@ -258,15 +258,17 @@ Fetches lot data and returns insurance estimate in one call.
 ## External API Integration
 
 The application integrates with an external Lot Management API:
-- **Base URL**: `http://localhost:52022/api/lots`
-- **Endpoint**: `GET /api/lots/{lotId}`
+- **Base URL**: `http://host.docker.internal:52022/externalapi/lots`
+- **Endpoint**: `GET /externalapi/lots/{lotId}`
 - **Purpose**: Fetch property details for insurance calculation
+- **Connection**: Uses `host.docker.internal` to access host machine from Docker container
 - **Data Extracted**:
-  - Address and location information
-  - Floor area and land area
+  - Address and location information (street, suburb, city, region)
+  - Floor area and land area (amenities)
   - Number of bedrooms/bathrooms
   - Build type and estimated completion year
   - Amenities and property specifications
+- **Logging**: Full JSON response logged for debugging and audit purposes
 
 ## Database Schema
 
@@ -332,6 +334,7 @@ External Lot API → LotService → LotController → Frontend
 - **Automatic**: All unhandled exceptions and errors
 - **Manual Info Logs**:
   - Lot data fetch requests (Lot ID)
+  - Full JSON response from external Lot API (for debugging)
   - Successful lot data retrieval (Lot ID, Address)
   - Insurance calculation requests (House Value, Location)
   - Quote saved to database (Premium, Risk Level)
@@ -349,10 +352,21 @@ External Lot API → LotService → LotController → Frontend
 - **Error**: Exceptions, database errors (automatic)
 - **Fatal**: Application startup failures (automatic)
 
+## Version Control
+
+The project uses Git with a comprehensive `.gitignore` file that excludes:
+- .NET build artifacts (bin/, obj/, *.dll, *.exe, *.pdb)
+- IDE files (Visual Studio, Rider, VS Code)
+- NuGet packages
+- Node.js dependencies (node_modules/)
+- Environment files (.env)
+- Logs and temporary files
+
 ## Future Enhancements
 - ✅ Database for storing quotes (MongoDB implemented)
 - ✅ External API integration for lot data
 - ✅ Centralized logging with Elasticsearch and Kibana
+- ✅ Git version control with proper .gitignore
 - Implement user authentication
 - Add more NZ-specific risk factors (flood zones, earthquake zones)
 - Email quote functionality
