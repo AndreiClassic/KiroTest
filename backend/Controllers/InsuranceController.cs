@@ -10,15 +10,20 @@ namespace backend.Controllers;
 public class InsuranceController : ControllerBase
 {
     private readonly IInsuranceQuoteRepository _repository;
+    private readonly ILogger<InsuranceController> _logger;
 
-    public InsuranceController(IInsuranceQuoteRepository repository)
+    public InsuranceController(IInsuranceQuoteRepository repository, ILogger<InsuranceController> logger)
     {
         _repository = repository;
+        _logger = logger;
     }
 
     [HttpPost("calculate")]
     public async Task<ActionResult<InsuranceResponse>> Calculate([FromBody] InsuranceRequest request)
     {
+        _logger.LogInformation("Calculating insurance for house value: {HouseValue}, Location: {Location}", 
+            request.HouseValue, request.Location);
+        
         // Simple calculation logic for NZ house insurance
         decimal baseRate = 0.003m; // 0.3% of house value
         
@@ -70,6 +75,9 @@ public class InsuranceController : ControllerBase
         };
 
         await _repository.CreateAsync(quote);
+        
+        _logger.LogInformation("Insurance quote saved. Annual Premium: {AnnualPremium}, Risk: {RiskLevel}", 
+            response.AnnualPremium, response.RiskLevel);
         
         return Ok(response);
     }

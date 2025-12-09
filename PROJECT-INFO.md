@@ -11,8 +11,10 @@ A full-stack web application for calculating house insurance premiums in New Zea
 - **Port**: 5000
 - **Key Features**:
   - RESTful API endpoint: `POST /api/insurance/calculate`
+  - External Lot API integration: `GET /api/lot/{lotId}`
+  - MongoDB integration for storing insurance quotes
   - CORS enabled for frontend communication
-  - Simple insurance calculation algorithm
+  - HttpClient service for external API calls
 
 ### Frontend
 - **Framework**: Vue 3 with TypeScript
@@ -21,11 +23,35 @@ A full-stack web application for calculating house insurance premiums in New Zea
 - **State Management**: Pinia
 - **Dev Port**: 5173
 - **Production Port**: 8080 (via nginx in Docker)
+- **Key Features**:
+  - Lot ID lookup with auto-population
+  - Real-time insurance calculation
+  - Responsive form validation
+
+### Database
+- **Database**: MongoDB
+- **Port**: 27017
+- **Purpose**: Store insurance quotes with lot information
+- **Collections**: quotes
+
+### Logging & Monitoring
+- **Logging Framework**: Serilog
+- **Log Storage**: Elasticsearch
+- **Log Visualization**: Kibana
+- **Elasticsearch Port**: 9201 (external), 9200 (internal)
+- **Kibana Port**: 5602 (external), 5601 (internal)
+- **Log Index**: insurance-logs-{date}
+- **Features**:
+  - Automatic error/exception logging
+  - HTTP request logging
+  - Structured logging with context
+  - Centralized log aggregation
 
 ### Infrastructure
 - **Containerization**: Docker
 - **Orchestration**: Docker Compose
 - **Web Server**: Nginx (for production frontend)
+- **Network**: Bridge network connecting all services
 
 ## Project Structure
 
@@ -33,18 +59,32 @@ A full-stack web application for calculating house insurance premiums in New Zea
 .
 ├── backend/
 │   ├── Controllers/
-│   │   └── InsuranceController.cs    # Main API controller
+│   │   ├── InsuranceController.cs    # Insurance calculation API
+│   │   └── LotController.cs          # Lot data integration API
 │   ├── Models/
 │   │   ├── InsuranceRequest.cs       # Request DTO
 │   │   └── InsuranceResponse.cs      # Response DTO
-│   ├── Program.cs                     # App configuration with CORS
+│   ├── Services/
+│   │   ├── ILotService.cs            # Lot service interface
+│   │   └── LotService.cs             # External API integration
+│   ├── DataAccess/
+│   │   ├── Configuration/
+│   │   │   └── MongoDbSettings.cs    # MongoDB configuration
+│   │   ├── Models/
+│   │   │   └── InsuranceQuote.cs     # MongoDB document model
+│   │   ├── Repositories/
+│   │   │   ├── IInsuranceQuoteRepository.cs
+│   │   │   └── InsuranceQuoteRepository.cs
+│   │   └── DataAccess.csproj         # DataAccess project
+│   ├── Program.cs                     # App configuration with DI
+│   ├── appsettings.json               # Configuration with MongoDB
 │   ├── Dockerfile                     # Backend container config
 │   └── backend.csproj
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── views/
-│   │   │   └── HomeView.vue          # Main calculator UI
+│   │   │   └── HomeView.vue          # Main calculator UI with Lot lookup
 │   │   ├── App.vue                    # Root component
 │   │   └── main.ts
 │   ├── vite.config.ts                 # Vite config with proxy
@@ -52,7 +92,7 @@ A full-stack web application for calculating house insurance premiums in New Zea
 │   ├── Dockerfile                     # Frontend container config
 │   └── package.json
 │
-├── docker-compose.yml                 # Production: both services in Docker
+├── docker-compose.yml                 # Full stack: MongoDB, Backend, Frontend
 ├── docker-compose.dev.yml             # Dev: backend only in Docker
 ├── run-prod.bat                       # Quick start for production
 ├── run-dev.bat                        # Quick start for development
@@ -96,6 +136,8 @@ docker-compose up --build
 ```
 - Frontend: http://localhost:8080
 - Backend: http://localhost:5000
+- Kibana (Logs): http://localhost:5602
+- Elasticsearch: http://localhost:9201
 
 ### Option 2: Development Mode (Backend in Docker, Frontend local)
 ```bash
@@ -125,6 +167,8 @@ docker-compose -f docker-compose.dev.yml down
 ### Calculate Insurance Premium
 **POST** `/api/insurance/calculate`
 
+Calculates insurance premium and saves quote to MongoDB.
+
 **Request Body**:
 ```json
 {
@@ -141,6 +185,54 @@ docker-compose -f docker-compose.dev.yml down
 {
   "annualPremium": 1650.00,
   "monthlyPremium": 137.50,
+  "riskLevel": "Low"
+}
+```
+
+### Get Lot Data
+**GET** `/api/lot/{lotId}`
+
+Fetches lot information from external API and returns processed data for insurance calculation.
+
+**Example**: `GET /api/lot/1156`
+
+**Response**:
+```json
+{
+  "address": "6 Topfield Place, Morningside",
+  "location": "Whangarei City",
+  "region": "Northland",
+  "floorArea": 130.5,
+  "landArea": 441.0,
+  "bedrooms": 3,
+  "bathrooms": 1,
+  "buildType": "1 Level Standalone",
+  "buildYear": 2025,
+  "estimatedHouseValue": 456750,
+  "mappedLocation": "Other",
+  "mappedConstructionType": "Other"
+}
+```
+
+### Get Insurance Estimate from Lot
+**GET** `/api/lot/{lotId}/insurance-estimate`
+
+Fetches lot data and returns insurance estimate in one call.
+
+**Example**: `GET /api/lot/1156/insurance-estimate`
+
+**Response**:
+```json
+{
+  "lotId": 1156,
+  "address": "6 Topfield Place, Morningside",
+  "location": "Whangarei City",
+  "estimatedHouseValue": 456750,
+  "floorArea": 130.5,
+  "bedrooms": 3,
+  "buildYear": 2025,
+  "annualPremium": 1370.25,
+  "monthlyPremium": 114.19,
   "riskLevel": "Low"
 }
 ```
@@ -163,21 +255,111 @@ docker-compose -f docker-compose.dev.yml down
 - Frontend Dockerfile uses multi-stage build (Node → Nginx)
 - Both services connected via `app-network` bridge network
 
+## External API Integration
+
+The application integrates with an external Lot Management API:
+- **Base URL**: `http://localhost:52022/api/lots`
+- **Endpoint**: `GET /api/lots/{lotId}`
+- **Purpose**: Fetch property details for insurance calculation
+- **Data Extracted**:
+  - Address and location information
+  - Floor area and land area
+  - Number of bedrooms/bathrooms
+  - Build type and estimated completion year
+  - Amenities and property specifications
+
+## Database Schema
+
+### InsuranceQuote Collection
+```json
+{
+  "_id": "ObjectId",
+  "houseValue": 500000,
+  "buildYear": 2000,
+  "location": "Auckland",
+  "constructionType": "Brick",
+  "bedrooms": 3,
+  "annualPremium": 1650.00,
+  "monthlyPremium": 137.50,
+  "riskLevel": "Low",
+  "createdAt": "2025-12-10T00:00:00Z"
+}
+```
+
 ## Environment Variables
 
 ### Backend
 - `ASPNETCORE_ENVIRONMENT`: Development/Production
 - `ASPNETCORE_URLS`: http://+:5000
+- `MongoDb__ConnectionString`: MongoDB connection string
+- `MongoDb__DatabaseName`: insurance
+
+### MongoDB
+- `MONGO_INITDB_ROOT_USERNAME`: admin
+- `MONGO_INITDB_ROOT_PASSWORD`: password123
+- `MONGO_INITDB_DATABASE`: insurance
 
 ### Frontend
 - No environment variables required for basic setup
 - API URL can be configured in Vite config
 
+## Key Features
+
+### Lot ID Integration
+1. User enters Lot ID from external system
+2. Backend fetches property data from external API
+3. System automatically:
+   - Estimates house value based on floor area ($3,500/m²)
+   - Maps location to insurance risk zones
+   - Maps build type to construction categories
+   - Extracts build year from completion dates
+4. Form auto-populates with calculated values
+5. User can adjust values before calculating premium
+
+### Data Flow
+```
+External Lot API → LotService → LotController → Frontend
+                                      ↓
+                              Auto-populate form
+                                      ↓
+                          InsuranceController → MongoDB
+```
+
+## Logging Strategy
+
+### What Gets Logged
+- **Automatic**: All HTTP requests (method, path, status, duration)
+- **Automatic**: All unhandled exceptions and errors
+- **Manual Info Logs**:
+  - Lot data fetch requests (Lot ID)
+  - Successful lot data retrieval (Lot ID, Address)
+  - Insurance calculation requests (House Value, Location)
+  - Quote saved to database (Premium, Risk Level)
+  - Application startup/shutdown
+
+### Viewing Logs
+1. Open Kibana: http://localhost:5602
+2. Go to "Discover" in the left menu
+3. Create index pattern: `insurance-logs-*`
+4. View real-time logs with filtering and search
+
+### Log Levels
+- **Information**: Normal operations (API calls, data retrieval)
+- **Warning**: Lot not found, external service issues
+- **Error**: Exceptions, database errors (automatic)
+- **Fatal**: Application startup failures (automatic)
+
 ## Future Enhancements
-- Add database for storing quotes
+- ✅ Database for storing quotes (MongoDB implemented)
+- ✅ External API integration for lot data
+- ✅ Centralized logging with Elasticsearch and Kibana
 - Implement user authentication
 - Add more NZ-specific risk factors (flood zones, earthquake zones)
 - Email quote functionality
 - Compare multiple insurance providers
 - Add unit tests for calculation logic
 - Add E2E tests for user flows
+- Add API endpoint to retrieve saved quotes
+- Implement quote history and comparison features
+- Add admin dashboard for quote management
+- Add application metrics and performance monitoring
