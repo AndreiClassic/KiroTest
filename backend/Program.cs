@@ -1,6 +1,7 @@
 using backend.DataAccess.Configuration;
 using backend.DataAccess.Repositories;
 using backend.Services;
+using DataAccess.Repositories;
 using Serilog;
 using Serilog.Sinks.Elasticsearch;
 
@@ -35,9 +36,13 @@ try
 
     // Register repositories
     builder.Services.AddSingleton<IInsuranceQuoteRepository, InsuranceQuoteRepository>();
+    builder.Services.AddScoped<IFloodQueryRepository, FloodQueryRepository>();
 
-    // Register HttpClient and LotService
+    // Register HttpClient and services
     builder.Services.AddHttpClient<ILotService, LotService>();
+    builder.Services.AddHttpClient<IHazardService, HazardService>();
+    builder.Services.AddScoped<IFloodMapService, FloodMapService>();
+    builder.Services.AddScoped<IPdfService, PdfService>();
 
     builder.Services.AddControllers();
     builder.Services.AddCors(options =>

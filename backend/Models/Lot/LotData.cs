@@ -16,4 +16,10 @@ public class LotData
     public int EstimatedHouseValue { get; set; }
     public string MappedLocation { get; set; } = string.Empty;
     public string MappedConstructionType { get; set; } = string.Empty;
+    
+    // Hazard zone information
+    public string FloodZone { get; set; } = "Unknown";
+    public string EarthquakeZone { get; set; } = "Unknown";
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
 }

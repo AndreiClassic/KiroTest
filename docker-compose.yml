@@ -41,6 +41,20 @@ services:
     networks:
       - app-network
 
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: insurance-postgis
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_DB=floodmaps
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
   backend:
     build: ./backend
     container_name: insurance-backend
@@ -50,8 +64,10 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - MongoDb__ConnectionString=mongodb://admin:password123@mongodb:27017
       - MongoDb__DatabaseName=insurance
+      - PostGIS__ConnectionString=Host=postgis;Port=5432;Database=floodmaps;Username=postgres;Password=postgres123
     depends_on:
       - mongodb
+      - postgis
     networks:
       - app-network
 
@@ -67,6 +83,7 @@ services:
 
 volumes:
   mongodb_data:
+  postgis_data:
   elasticsearch_data:
 
 networks:

@@ -7,12 +7,14 @@ public class LotService : ILotService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<LotService> _logger;
+    private readonly IHazardService _hazardService;
     private const string BaseUrl = "http://host.docker.internal:52022/externalapi/lots";
 
-    public LotService(HttpClient httpClient, ILogger<LotService> logger)
+    public LotService(HttpClient httpClient, ILogger<LotService> logger, IHazardService hazardService)
     {
         _httpClient = httpClient;
         _logger = logger;
+        _hazardService = hazardService;
     }
 
     public async Task<LotData?> GetLotDataAsync(int lotId)
@@ -46,10 +48,17 @@ public class LotService : ILotService
             var floorArea = result.Amenities?.FloorArea ?? 0;
             var location = result.Location?.Area?.Label ?? result.LotAddress?.City ?? "";
             var buildType = result.BuildType?.Label ?? "";
+            var address = $"{result.LotAddress?.Street}, {result.LotAddress?.Suburb}";
+
+            // Get hazard zone information
+            _logger.LogInformation("Fetching hazard zone information for address: {Address}", address);
+            var hazardInfo = await _hazardService.GetHazardInfoAsync(address);
+            _logger.LogInformation("Hazard info retrieved - FloodZone: {FloodZone}, EarthquakeZone: {EarthquakeZone}, Lat: {Lat}, Long: {Long}", 
+                hazardInfo.FloodZone, hazardInfo.EarthquakeZone, hazardInfo.Latitude, hazardInfo.Longitude);
 
             return new LotData
             {
-                Address = $"{result.LotAddress?.Street}, {result.LotAddress?.Suburb}",
+                Address = address,
                 Location = location,
                 Region = result.Location?.Region?.Label ?? result.LotAddress?.RegionName ?? "",
                 FloorArea = floorArea,
@@ -62,7 +71,13 @@ public class LotService : ILotService
                 // Pre-calculated insurance form values
                 EstimatedHouseValue = (int)Math.Round(floorArea * 3500),
                 MappedLocation = location, // Keep original location as string
-                MappedConstructionType = MapConstructionType(buildType)
+                MappedConstructionType = MapConstructionType(buildType),
+                
+                // Hazard zone information
+                FloodZone = hazardInfo.FloodZone,
+                EarthquakeZone = hazardInfo.EarthquakeZone,
+                Latitude = hazardInfo.Latitude,
+                Longitude = hazardInfo.Longitude
             };
         }
         catch (Exception ex)

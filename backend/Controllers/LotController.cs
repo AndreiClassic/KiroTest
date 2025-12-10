@@ -10,11 +10,13 @@ namespace backend.Controllers;
 public class LotController : ControllerBase
 {
     private readonly ILotService _lotService;
+    private readonly IPdfService _pdfService;
     private readonly ILogger<LotController> _logger;
 
-    public LotController(ILotService lotService, ILogger<LotController> logger)
+    public LotController(ILotService lotService, IPdfService pdfService, ILogger<LotController> logger)
     {
         _lotService = lotService;
+        _pdfService = pdfService;
         _logger = logger;
     }
 
@@ -85,5 +87,33 @@ public class LotController : ControllerBase
             monthlyPremium = Math.Round(annualPremium / 12, 2),
             riskLevel
         });
+    }
+
+    [HttpPost("{lotId}/download-report")]
+    public async Task<IActionResult> DownloadPropertyReport(int lotId, [FromBody] InsuranceResponse? insuranceQuote)
+    {
+        _logger.LogInformation("Generating PDF report for Lot ID: {LotId}", lotId);
+        
+        var lotData = await _lotService.GetLotDataAsync(lotId);
+        
+        if (lotData == null)
+        {
+            _logger.LogWarning("Lot {LotId} not found for PDF generation", lotId);
+            return NotFound(new { message = $"Lot {lotId} not found or service unavailable" });
+        }
+
+        try
+        {
+            var pdfBytes = _pdfService.GeneratePropertyReport(lotId, lotData, insuranceQuote);
+            
+            _logger.LogInformation("PDF report generated successfully for Lot {LotId}", lotId);
+            
+            return File(pdfBytes, "application/pdf", $"lot_{lotId}_report.pdf");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating PDF for Lot {LotId}", lotId);
+            return StatusCode(500, new { message = "Error generating PDF report" });
+        }
     }
 }

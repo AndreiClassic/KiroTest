@@ -7,6 +7,8 @@ interface InsuranceRequest {
   location: string
   constructionType: string
   bedrooms: number
+  floodZone?: string
+  earthquakeZone?: string
 }
 
 interface InsuranceResponse {
@@ -28,6 +30,10 @@ interface LotData {
   estimatedHouseValue: number
   mappedLocation: string
   mappedConstructionType: string
+  floodZone: string
+  earthquakeZone: string
+  latitude: number | null
+  longitude: number | null
 }
 
 const lotId = ref<number | null>(null)
@@ -45,6 +51,98 @@ const form = ref<InsuranceRequest>({
 
 const result = ref<InsuranceResponse | null>(null)
 const loading = ref(false)
+
+const downloadPDF = async () => {
+  if (!lotData.value || !lotId.value) return
+  
+  try {
+    const response = await fetch(`http://localhost:5000/api/lot/${lotId.value}/download-report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(result.value)
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to generate PDF')
+    }
+    
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `lot_${lotId.value}_report.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Error downloading PDF:', error)
+    alert('Failed to generate PDF report')
+  }
+}
+
+const downloadPDF_OLD = () => {
+  if (!lotData.value) return
+  
+  const lot = lotData.value
+  const quote = result.value
+  
+  // Create PDF content
+  const content = `
+LOT ${lotId.value}
+DP - 
+SITE AREA ${lot.landArea.toFixed(0)}m²
+
+┌─────────────────────┬──────────────┐
+│ WIND ZONE           │ HIGH         │
+│ EQ ZONE             │ ${lot.earthquakeZone.toUpperCase().padEnd(12)} │
+│ FLOOD ZONE          │ ${lot.floodZone.toUpperCase().padEnd(12)} │
+│ CLIMATE ZONE        │ 4            │
+│ SUBSOIL CLASS       │ -            │
+│ PLANNING ZONE       │ RES21        │
+└─────────────────────┴──────────────┘
+
+SITE COVERAGE - 50% MAX.
+
+DWELLING (O/CLADDING)    = ${lot.floorArea.toFixed(1)}m²
+SITE AREA                = ${lot.landArea.toFixed(0)}m²
+                         = ${((lot.floorArea / lot.landArea) * 100).toFixed(1)}%
+
+SITE AREA                = ${lot.landArea.toFixed(0)}m²
+DWELLING (O/ROOF)        = ${lot.floorArea.toFixed(1)}m²
+BEDROOMS                 = ${lot.bedrooms}
+BATHROOMS                = ${lot.bathrooms}
+
+ADDRESS: ${lot.address}
+LOCATION: ${lot.location}, ${lot.region}
+BUILD TYPE: ${lot.buildType}
+${lot.buildYear ? `BUILD YEAR: ${lot.buildYear}` : ''}
+
+COORDINATES: ${lot.latitude?.toFixed(6)}, ${lot.longitude?.toFixed(6)}
+
+${quote ? `
+INSURANCE QUOTE
+───────────────────────────────────
+Annual Premium:  $${quote.annualPremium.toFixed(2)}
+Monthly Premium: $${quote.monthlyPremium.toFixed(2)}
+Risk Level:      ${quote.riskLevel}
+───────────────────────────────────
+` : ''}
+
+Generated: ${new Date().toLocaleString()}
+`
+  
+  // Create blob and download
+  const blob = new Blob([content], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `lot_${lotId.value}_report.txt`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
 const fetchLotData = async () => {
   if (!lotId.value) return
@@ -87,10 +185,17 @@ const clearLotData = () => {
 const calculateInsurance = async () => {
   loading.value = true
   try {
+    // Include hazard zones if available from lot data
+    const requestData = {
+      ...form.value,
+      floodZone: lotData.value?.floodZone,
+      earthquakeZone: lotData.value?.earthquakeZone
+    }
+    
     const response = await fetch('http://localhost:5000/api/insurance/calculate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form.value)
+      body: JSON.stringify(requestData)
     })
     result.value = await response.json()
   } catch (error) {
@@ -145,12 +250,28 @@ const calculateInsurance = async () => {
         <div class="lot-details">
           <div><strong>Address:</strong> {{ lotData.address }}</div>
           <div><strong>Location:</strong> {{ lotData.location }}, {{ lotData.region }}</div>
+          <div v-if="lotData.latitude && lotData.longitude">
+            <strong>Coordinates:</strong> {{ lotData.latitude.toFixed(4) }}, {{ lotData.longitude.toFixed(4) }}
+          </div>
           <div><strong>Floor Area:</strong> {{ lotData.floorArea }} m²</div>
           <div><strong>Land Area:</strong> {{ lotData.landArea }} m²</div>
           <div><strong>Bedrooms:</strong> {{ lotData.bedrooms }}</div>
           <div><strong>Build Type:</strong> {{ lotData.buildType }}</div>
           <div v-if="lotData.buildYear"><strong>Build Year:</strong> {{ lotData.buildYear }}</div>
         </div>
+        
+        <div class="hazard-zones">
+          <h4>Hazard Zones</h4>
+          <div class="hazard-item">
+            <span>Flood Zone:</span>
+            <span :class="'zone-' + lotData.floodZone.toLowerCase()">{{ lotData.floodZone }}</span>
+          </div>
+          <div class="hazard-item">
+            <span>Earthquake Zone:</span>
+            <span :class="'zone-' + lotData.earthquakeZone.toLowerCase()">{{ lotData.earthquakeZone }}</span>
+          </div>
+        </div>
+        
         <p class="lot-success">✓ Form auto-populated with lot data</p>
       </div>
     </div>
@@ -205,6 +326,15 @@ const calculateInsurance = async () => {
         <span>Risk Level:</span>
         <strong :class="'risk-' + result.riskLevel.toLowerCase()">{{ result.riskLevel }}</strong>
       </div>
+      
+      <button 
+        v-if="lotData" 
+        @click="downloadPDF" 
+        class="btn-download"
+        type="button"
+      >
+        📄 Download Property Report (PDF)
+      </button>
     </div>
   </div>
 </template>
@@ -331,6 +461,65 @@ h1 {
   font-weight: 600;
 }
 
+.hazard-zones {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.hazard-zones h4 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: #495057;
+  font-size: 1rem;
+}
+
+.hazard-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.hazard-item span:first-child {
+  color: #6c757d;
+  font-weight: 600;
+}
+
+.zone-high {
+  color: #dc3545;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem;
+  background: #f8d7da;
+  border-radius: 4px;
+}
+
+.zone-medium {
+  color: #ffc107;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem;
+  background: #fff3cd;
+  border-radius: 4px;
+}
+
+.zone-low {
+  color: #28a745;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem;
+  background: #d4edda;
+  border-radius: 4px;
+}
+
+.zone-unknown {
+  color: #6c757d;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  background: #e9ecef;
+  border-radius: 4px;
+}
+
 .form {
   background: #f8f9fa;
   padding: 2rem;
@@ -408,4 +597,15 @@ button:disabled {
 .risk-low { color: #28a745; }
 .risk-medium { color: #ffc107; }
 .risk-high { color: #dc3545; }
+
+.btn-download {
+  margin-top: 1.5rem;
+  background: #28a745;
+  font-size: 1.1rem;
+  padding: 1.25rem;
+}
+
+.btn-download:hover {
+  background: #218838;
+}
 </style>

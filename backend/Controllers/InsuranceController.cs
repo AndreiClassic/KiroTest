@@ -49,7 +49,28 @@ public class InsuranceController : ControllerBase
             _ => 1.0m
         };
         
-        decimal annualPremium = request.HouseValue * baseRate * ageFactor * constructionFactor * locationFactor;
+        // Flood zone factor
+        decimal floodFactor = (request.FloodZone?.ToLower()) switch
+        {
+            "high" => 1.3m,
+            "medium" => 1.15m,
+            "low" => 1.0m,
+            _ => 1.0m
+        };
+        
+        // Earthquake zone factor
+        decimal earthquakeFactor = (request.EarthquakeZone?.ToLower()) switch
+        {
+            "high" => 1.25m,
+            "medium" => 1.1m,
+            "low" => 1.0m,
+            _ => 1.0m
+        };
+        
+        decimal annualPremium = request.HouseValue * baseRate * ageFactor * constructionFactor * locationFactor * floodFactor * earthquakeFactor;
+        
+        _logger.LogInformation("Premium factors - Age: {Age}, Construction: {Construction}, Location: {Location}, Flood: {Flood}, Earthquake: {Earthquake}", 
+            ageFactor, constructionFactor, locationFactor, floodFactor, earthquakeFactor);
         
         string riskLevel = annualPremium / request.HouseValue > 0.004m ? "High" : 
                           annualPremium / request.HouseValue > 0.003m ? "Medium" : "Low";
